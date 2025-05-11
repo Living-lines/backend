@@ -49,24 +49,6 @@ module.exports = { upload, uploadToSpaces };
 
 */
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // D:\backend\utils\upload.js
 require('dotenv').config();
 
