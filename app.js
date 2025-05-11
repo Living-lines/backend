@@ -1,7 +1,7 @@
-// app.js
-require('dotenv').config();              // ← load .env first
+require('dotenv').config(); // load .env first
 
 const express      = require('express');
+const cors         = require('cors'); // ✅ add this
 const path         = require('path');
 const logger       = require('morgan');
 const cookieParser = require('cookie-parser');
@@ -12,6 +12,8 @@ const quotesRouter   = require('./routes/quotes');
 const catalogsRouter = require('./routes/catalogs');
 
 const app = express();
+
+app.use(cors()); // ✅ add this line right after app is created
 
 // standard middleware
 app.use(logger('dev'));
