@@ -22,7 +22,7 @@ router.get('/', async (req, res) => {
     const { brand, product_type, model_name, search } = req.query;
     const filter = {};
 
-    // Exact-match brand, case-sensitive
+    // Exact-match brand, case-insensitive
     if (brand) {
       filter.brand = brand;
     }
@@ -37,9 +37,9 @@ router.get('/', async (req, res) => {
       filter.model_name = { $contains: model_name };
     }
 
-    // Cross-field substring search (case-sensitive)
+    // Cross-field substring search (case-insensitive)
     if (search) {
-      const cap = search;
+      const cap = capitalize(search);
       filter.$any = [
         { brand:        { $contains: search } },
         { brand:        { $contains: cap    } },
