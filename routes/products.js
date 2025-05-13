@@ -3,7 +3,9 @@
 const express = require('express');
 const router  = express.Router();
 const xata    = require('../config/xataClient');
-const { upload, uploadToSpaces } = require('../utils/upload');
+//const { upload, uploadToSpaces } = require('../utils/upload');
+const { imageUpload, uploadToSpaces } = require('../utils/upload');
+
 
 // Capitalize first letter: "nike" → "Nike"
 function capitalize(str) {
@@ -65,7 +67,7 @@ router.get('/', async (req, res) => {
 
 // POST /api/products
 // multipart/form-data: brand, model_name, product_type + file (image)
-router.post('/', upload, async (req, res) => {
+router.post('/', imageUpload, async (req, res) => {
   try {
     const { brand, model_name, product_type } = req.body;
     const file = req.file;

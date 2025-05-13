@@ -1,7 +1,10 @@
 // routes/catalogs.js
 const express = require('express');
 const router  = express.Router();
-const { upload, uploadToSpaces } = require('../utils/upload');
+//const { upload, uploadToSpaces } = require('../utils/upload');
+const { pdfUpload, uploadToSpaces } = require('../utils/upload');
+
+
 const xata    = require('../config/xataClient');
 
 // GET all catalogs
@@ -19,7 +22,7 @@ router.get('/', async (req, res) => {
 });
 
 // POST new catalog (unchanged)
-router.post('/', upload, async (req, res) => {
+router.post('/', pdfUpload, async (req, res) => {
   try {
     const { title } = req.body;
     if (!req.file || !title) {
