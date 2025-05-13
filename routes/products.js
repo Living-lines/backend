@@ -19,36 +19,36 @@ function capitalize(str) {
 //   • product_type exact match (can apply same logic if needed)
 //   • model_name   substring, case-sensitive
 //   • search       substring across all three, case-insensitive via dual probes
+// GET /api/products
 router.get('/', async (req, res) => {
   try {
     const { brand, product_type, model_name, search } = req.query;
     const filter = {};
 
-    // Exact-match brand, case-insensitive
+    // Case-insensitive search for brand
     if (brand) {
-      filter.brand = brand;
+      const cap = capitalize(brand);  // Ensure capitalization
+      filter.brand = { $contains: brand.toLowerCase() };  // Ensure lowercase match for Xata
     }
 
-    // Exact-match product_type (if you need case-insensitivity, apply capitalize here too)
+    // Case-insensitive search for product_type (if you need it)
     if (product_type) {
-      filter.product_type = product_type;
+      const cap = capitalize(product_type);
+      filter.product_type = { $contains: product_type.toLowerCase() };  // Ensure lowercase match for Xata
     }
 
     // Substring match on model_name (case-sensitive)
     if (model_name) {
-      filter.model_name = { $contains: model_name };
+      filter.model_name = { $contains: model_name };  // This remains case-sensitive as you wanted
     }
 
     // Cross-field substring search (case-insensitive)
     if (search) {
       const cap = capitalize(search);
       filter.$any = [
-        { brand:        { $contains: search } },
-        { brand:        { $contains: cap    } },
-        { product_type: { $contains: search } },
-        { product_type: { $contains: cap    } },
-        { model_name:   { $contains: search } },
-        { model_name:   { $contains: cap    } },
+        { brand: { $contains: search.toLowerCase() } },  // Ensure case-insensitive search for brand
+        { product_type: { $contains: search.toLowerCase() } },  // Case-insensitive for product type
+        { model_name: { $contains: search.toLowerCase() } },  // Case-insensitive for model name
       ];
     }
 
@@ -59,11 +59,12 @@ router.get('/', async (req, res) => {
   } catch (err) {
     console.error('🚨 Products Fetch Error:', err.response?.data || err.message);
     return res.status(500).json({
-      error:   'Failed to fetch products',
+      error: 'Failed to fetch products',
       details: err.message
     });
   }
 });
+
 
 // POST /api/products
 // multipart/form-data: brand, model_name, product_type + file (image)
