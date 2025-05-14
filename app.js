@@ -10,6 +10,7 @@ const cookieParser = require('cookie-parser');
 const productsRouter = require('./routes/products');
 const quotesRouter   = require('./routes/quotes');
 const catalogsRouter = require('./routes/catalogs');
+const contactRouter  = require('./routes/contact');
 
 const app = express();
 
@@ -28,6 +29,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/api/products', productsRouter);
 app.use('/api/quotes',   quotesRouter);
 app.use('/api/catalogs', catalogsRouter);
+app.use('/api/contact',  contactRouter);
 
 // catch-all 404
 app.use((req, res) => {
