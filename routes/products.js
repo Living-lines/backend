@@ -104,4 +104,18 @@ router.post('/', imageUpload, async (req, res) => {
   }
 });
 
+
+
+router.delete('/:id', async (req, res) => {
+  try {
+    const productId = req.params.id;
+    await xata.delete(`/tables/products/data/${productId}`);  
+    res.sendStatus(204);                                      
+  } catch (err) {
+    console.error('Failed to delete product:', err.response?.data || err.message);
+    res.status(500).json({ error: 'Failed to delete product', details: err.message });
+  }
+});
+
+
 module.exports = router;

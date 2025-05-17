@@ -8,9 +8,23 @@ router.get('/', async (req, res) => {
     const response = await xata.post('/tables/quote_requests/query', {});
     res.json(response.data.records);
   } catch (err) {
+    console.error('❌ GET /quotes error:', err.response?.data || err.message);
     res.status(500).json({ error: 'Failed to fetch quotes', details: err.message });
   }
 });
+
+
+router.delete('/:id', async (req, res) => {
+  try {
+    const quoteId = req.params.id;
+    await xata.delete(`/tables/quote_requests/data/${quoteId}`);
+    res.sendStatus(204);
+  } catch (err) {
+    console.error('Failed to delete quote:', err.response?.data || err.message);
+    res.status(500).json({ error: 'Failed to delete quote', details: err.message });
+  }
+});
+
 
 // POST new quote request
 router.post('/', async (req, res) => {
