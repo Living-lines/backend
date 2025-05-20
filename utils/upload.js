@@ -1,25 +1,53 @@
 require('dotenv').config();
 
 const multer = require('multer');
-const AWS = require('aws-sdk');
+const AWS    = require('aws-sdk');
 const { v4: uuidv4 } = require('uuid');
-const path = require('path');
+const path  = require('path');
 
-// 1. Multer setup for image upload (only for product images)
+// existing single‐file uploaders left untouched
 const imageStorage = multer.memoryStorage();
-const imageUpload = multer({
+const imageUpload  = multer({
   storage: imageStorage,
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB for images
-}).single('image'); // field name must be 'image'
+  limits: { fileSize: 50 * 1024 * 1024 },
+}).single('image');
 
-// 2. Multer setup for PDF upload (for catalog)
 const pdfStorage = multer.memoryStorage();
-const pdfUpload = multer({
+const pdfUpload  = multer({
   storage: pdfStorage,
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB for PDFs
-}).single('file'); // field name must be 'pdf'
+  limits: { fileSize: 50 * 1024 * 1024 },
+}).single('file');    // ← still accepts `file` for backwards‐compatibility
 
-// 3. DigitalOcean Spaces client
+// NEW: accept BOTH file (PDF) and image in one upload:
+const catalogUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (
+      file.fieldname === 'file' &&
+      file.mimetype === 'application/pdf'
+    ) {
+      return cb(null, true);
+    }
+    if (
+      file.fieldname === 'image' &&
+      (file.mimetype === 'image/jpeg' || file.mimetype === 'image/png')
+    ) {
+      return cb(null, true);
+    }
+    return cb(
+      new Error(
+        `Invalid file type for '${file.fieldname}'. ` +
+        `Use field 'file' for PDFs and 'image' for JPEG/PNG.`
+      )
+    );
+  }
+}).fields([
+  { name: 'file',  maxCount: 1 },
+  { name: 'image', maxCount: 1 },
+]);
+
+// DigitalOcean Spaces client (unchanged)
 const spacesEndpoint = new AWS.Endpoint(process.env.DO_SPACES_ENDPOINT);
 const s3 = new AWS.S3({
   endpoint: spacesEndpoint,
@@ -27,26 +55,10 @@ const s3 = new AWS.S3({
   secretAccessKey: process.env.DO_SPACES_SECRET,
 });
 
-// 4. Upload function to handle both PDF and image uploads
+// upload helper (unchanged)
 async function uploadToSpaces(buffer, originalName, mimetype, folder) {
   const ext = path.extname(originalName).toLowerCase();
-  let allowedTypes;
-
-  // Check file type (images or PDFs)
-  if (mimetype.startsWith('image/')) {
-    allowedTypes = ['image/jpeg', 'image/png'];
-    if (!allowedTypes.includes(mimetype)) {
-      throw new Error('Only JPEG/PNG images are allowed');
-    }
-  } else if (mimetype === 'application/pdf') {
-    allowedTypes = ['application/pdf'];
-  } else {
-    throw new Error('Only images (JPEG/PNG) and PDFs are allowed');
-  }
-
-  // Generate a unique file name
   const key = `${folder}/${uuidv4()}${ext}`;
-
   const params = {
     Bucket: process.env.DO_SPACES_BUCKET,
     Key: key,
@@ -54,9 +66,13 @@ async function uploadToSpaces(buffer, originalName, mimetype, folder) {
     ContentType: mimetype,
     ACL: 'public-read',
   };
-
   const data = await s3.upload(params).promise();
-  return data; // .Location contains the public URL
+  return data; // data.Location has the URL
 }
 
-module.exports = { imageUpload, pdfUpload, uploadToSpaces };
+module.exports = {
+  imageUpload,
+  pdfUpload,
+  catalogUpload,
+  uploadToSpaces,
+};
