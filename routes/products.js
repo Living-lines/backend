@@ -21,7 +21,7 @@ function capitalize(str) {
 //   • search       substring across all three, case-insensitive via dual probes
 router.get('/', async (req, res) => {
   try {
-    const { brand, product_type, model_name, search } = req.query;
+    const { brand, product_type, model_name, search, description } = req.query;
     const filter = {};
 
     // Exact-match brand, case-insensitive
@@ -37,6 +37,9 @@ router.get('/', async (req, res) => {
     // Substring match on model_name (case-sensitive)
     if (model_name) {
       filter.model_name = { $contains: model_name };
+    }
+    if (description) {
+      filter.description = { $contains: description };
     }
 
     // Cross-field substring search (case-insensitive)
@@ -69,12 +72,12 @@ router.get('/', async (req, res) => {
 // multipart/form-data: brand, model_name, product_type + file (image)
 router.post('/', imageUpload, async (req, res) => {
   try {
-    const { brand, model_name, product_type } = req.body;
+    const { brand, model_name, product_type, description } = req.body;
     const file = req.file;
 
-    if (!brand || !model_name || !product_type || !file) {
+    if (!brand || !model_name || !product_type || !description ||!file) {
       return res.status(400).json({
-        error: 'brand, model_name, product_type and image file are all required'
+        error: 'brand, model_name, product_type, desc and image file are all required'
       });
     }
 
@@ -91,6 +94,7 @@ router.post('/', imageUpload, async (req, res) => {
       brand,
       model_name,
       product_type,
+      description,
       image_url
     });
 
