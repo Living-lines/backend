@@ -72,12 +72,12 @@ router.get('/', async (req, res) => {
 // multipart/form-data: brand, model_name, product_type + file (image)
 router.post('/', imageUpload, async (req, res) => {
   try {
-    const { brand, model_name, product_type, description } = req.body;
+    const { brand, model_name, product_type, description, tilestype } = req.body;
     const file = req.file;
 
-    if (!brand || !model_name || !product_type || !description ||!file) {
+    if (!brand || !model_name || !product_type || !description || !file) {
       return res.status(400).json({
-        error: 'brand, model_name, product_type, desc and image file are all required'
+        error: 'brand, model_name, product_type, description, and image file are all required'
       });
     }
 
@@ -89,20 +89,28 @@ router.post('/', imageUpload, async (req, res) => {
       `products/${brand}`
     );
 
-    // Save the record in Xata
-    const { data } = await xata.post('/tables/products/data', {
+    // Prepare the product data to be saved
+    const productData = {
       brand,
       model_name,
       product_type,
       description,
-      image_url
-    });
+      image_url  // Now image_url is correctly assigned before use
+    };
+
+    // Only add tilestype if product_type is "Tiles"
+    if (product_type === 'Tiles' || 'tiles' && tilestype) {
+      productData.tilestype = tilestype;
+    }
+
+    // Save the record in Xata
+    const { data } = await xata.post('/tables/products/data', productData);
 
     return res.status(201).json(data);
   } catch (err) {
     console.error('🚨 Product Upload Error:', err);
     return res.status(500).json({
-      error:   'Failed to add product',
+      error: 'Failed to add product',
       details: err.message
     });
   }
