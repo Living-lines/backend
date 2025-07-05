@@ -1,78 +1,62 @@
 require('dotenv').config();
 
-const multer = require('multer');
-const AWS    = require('aws-sdk');
+const multer  = require('multer');
+const AWS     = require('aws-sdk');
 const { v4: uuidv4 } = require('uuid');
-const path  = require('path');
+const path    = require('path');
 
-// existing single‐file uploaders left untouched
-const imageStorage = multer.memoryStorage();
-const imageUpload  = multer({
-  storage: imageStorage,
-  limits: { fileSize: 50 * 1024 * 1024 },
-}).single('image');
-
-const pdfStorage = multer.memoryStorage();
-const pdfUpload  = multer({
-  storage: pdfStorage,
-  limits: { fileSize: 50 * 1024 * 1024 },
-}).single('file');    // ← still accepts `file` for backwards‐compatibility
-
-// NEW: accept BOTH file (PDF) and image in one upload:
-const catalogUpload = multer({
+/* ──────────────────────────────
+   1.  Generic in-memory uploader
+   ────────────────────────────── */
+const uploader = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (
-      file.fieldname === 'file' &&
-      file.mimetype === 'application/pdf'
-    ) {
-      return cb(null, true);
-    }
-    if (
-      file.fieldname === 'image' &&
-      (file.mimetype === 'image/jpeg' || file.mimetype === 'image/png')
-    ) {
-      return cb(null, true);
-    }
-    return cb(
-      new Error(
-        `Invalid file type for '${file.fieldname}'. ` +
-        `Use field 'file' for PDFs and 'image' for JPEG/PNG.`
-      )
-    );
-  }
-}).fields([
-  { name: 'file',  maxCount: 1 },
-  { name: 'image', maxCount: 1 },
-]);
-
-// DigitalOcean Spaces client (unchanged)
-const spacesEndpoint = new AWS.Endpoint(process.env.DO_SPACES_ENDPOINT);
-const s3 = new AWS.S3({
-  endpoint: spacesEndpoint,
-  accessKeyId: process.env.DO_SPACES_KEY,
-  secretAccessKey: process.env.DO_SPACES_SECRET,
+  limits:  { fileSize: 50 * 1024 * 1024 }      // 50 MB cap
 });
 
-// upload helper (unchanged)
-async function uploadToSpaces(buffer, originalName, mimetype, folder) {
+/* ──────────────────────────────
+   2.  Special-case middlewares
+   ────────────────────────────── */
+// PDF-only (old route, unchanged)
+const pdfUpload = uploader.single('file');
+
+// Catalog route: one PDF + one preview image
+const catalogUpload = uploader.fields([
+  { name: 'file',  maxCount: 1 },               // PDF
+  { name: 'image', maxCount: 1 }                // JPEG/PNG
+]);
+
+/* ──────────────────────────────
+   3.  DigitalOcean Spaces helper
+   ────────────────────────────── */
+const spacesEndpoint = new AWS.Endpoint(process.env.DO_SPACES_ENDPOINT);
+
+const s3 = new AWS.S3({
+  endpoint:        spacesEndpoint,
+  accessKeyId:     process.env.DO_SPACES_KEY,
+  secretAccessKey: process.env.DO_SPACES_SECRET
+});
+
+async function uploadToSpaces(buffer, originalName, mime, folder) {
   const ext = path.extname(originalName).toLowerCase();
   const key = `${folder}/${uuidv4()}${ext}`;
-  const params = {
+
+  const { Location } = await s3.upload({
     Bucket: process.env.DO_SPACES_BUCKET,
-    Key: key,
-    Body: buffer,
-    ContentType: mimetype,
-    ACL: 'public-read',
-  };
-  const data = await s3.upload(params).promise();
-  return data; // data.Location has the URL
+    Key:    key,
+    Body:   buffer,
+    ContentType: mime,
+    ACL:    'public-read'
+  }).promise();
+
+  return { Location };        // Return URL
 }
 
+/* ──────────────────────────────
+   4.  Exports
+   ────────────────────────────── */
 module.exports = {
-  imageUpload,
+  uploader,        // <-- generic Multer instance
   pdfUpload,
   catalogUpload,
-  uploadToSpaces,
+  uploadToSpaces
 };
