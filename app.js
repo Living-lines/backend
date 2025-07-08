@@ -28,6 +28,8 @@ app.use('/api/products', productsRouter);
 app.use('/api/quotes', quotesRouter);
 app.use('/api/catalogs', catalogsRouter);
 app.use('/api/contact', contactRouter);
+app.use('/api/tilestype', require('./routes/tilestype'));
+
 
 // Catch-all 404 for non-existent routes
 app.use((req, res) => {
