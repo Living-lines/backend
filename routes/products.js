@@ -98,4 +98,23 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+
+
+
+
+
+/* ───────────── GET /api/product/tilestypes ──────────────*/
+router.get('/tilestypes', async (req, res) => {
+  try {
+    const { data } = await xata.post(`/tables/${TABLE}/query`, {});
+    const records = data.records || [];
+    const tileTypes = [...new Set(records.map(item => item.tilestype).filter(Boolean))];
+    res.status(200).json(tileTypes);
+  } catch (err) {
+    console.error('🚨 Product tilestype fetch error:', err.response?.data || err.message);
+    res.status(500).json({ error: 'Failed to fetch tile types', details: err.message });
+  }
+});
+
+
 module.exports = router;
