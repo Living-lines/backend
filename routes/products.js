@@ -68,7 +68,7 @@ router.get('/', async (req, res) => {
      • tilestype  (optional, only if product_type === "Tiles")            */
 router.post(
   '/',
-  uploader.array('images', 8),                       // accept up to 8 images
+  uploader.array('images', 15),                       // accept up to 8 images
   async (req, res) => {
     try {
       const { brand, product_type, description, tilestype } = req.body;
