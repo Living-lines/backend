@@ -23,15 +23,41 @@ router.get('/', async (req, res) => {
         { description:  { $contains: search } }
       ];
     }
+    
+    // Pagination variables
+    const PAGE_SIZE = 500; // Set a reasonable page size per your needs
+    let page = 0;
+    let allRecords = [];
+    let hasMore = true;
 
-    const body     = Object.keys(filter).length ? { filter } : {};
-    const { data } = await xata.post(`/tables/${TABLE}/query`, body);
-    res.status(200).json(data.records);
+    // Loop to fetch all records paginated
+    while (hasMore) {
+      const body = Object.keys(filter).length ? { filter } : {};
+      // Add pagination to body
+      body.page = { size: PAGE_SIZE, offset: page * PAGE_SIZE };
+
+      const { data } = await xata.post(`/tables/${TABLE}/query`, body);
+
+      if (data && data.records && data.records.length > 0) {
+        allRecords = allRecords.concat(data.records);
+        if (data.records.length < PAGE_SIZE) {
+          hasMore = false; // last page reached
+        } else {
+          page += 1;
+        }
+      } else {
+        hasMore = false; // no more records
+      }
+    }
+
+    res.status(200).json(allRecords);
+
   } catch (err) {
     console.error('🚨 Product fetch error:', err.response?.data || err.message);
     res.status(500).json({ error: 'Failed to fetch products', details: err.message });
   }
 });
+
 
 /* ─────────────────────────── POST /api/product ─────────────────────────
    multipart/form-data:
