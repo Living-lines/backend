@@ -1,23 +1,25 @@
 const express = require('express');
-const router  = express.Router();
-const xata    = require('../config/xataClient');
+const router = express.Router();
+const xata = require('../config/xataClient');
 const { uploader, uploadToSpaces } = require('../utils/upload');
 
 const TABLE = 'product';
 
 router.get('/', async (req, res) => {
   try {
-    const { brand, product_type, search, model, model_name } = req.query;
+    const { brand, product_type, search, model, model_name, series } = req.query;
     const filter = {};
     if (brand) filter.brand = brand;
     if (product_type) filter.product_type = product_type;
     if (model || model_name) filter.model_name = model || model_name;
+    if (series) filter.series = series;
     if (search) {
       filter.$any = [
-        { brand:        { $contains: search } },
+        { brand: { $contains: search } },
         { product_type: { $contains: search } },
-        { description:  { $contains: search } },
-        { model_name:   { $contains: search } }
+        { description: { $contains: search } },
+        { model_name: { $contains: search } },
+        { series: { $contains: search } }
       ];
     }
     const PAGE_SIZE = 500;
@@ -50,7 +52,7 @@ router.post(
   uploader.array('images', 15),
   async (req, res) => {
     try {
-      const { brand, product_type, description, tilestype, model_name } = req.body;
+      const { brand, product_type, description, tilestype, model_name, series } = req.body;
       const files = req.files;
       if (!brand || !product_type || !description || !files?.length) {
         return res.status(400).json({
@@ -73,9 +75,8 @@ router.post(
         description,
         images: imageURLs
       };
-      if (model_name) {
-        record.model_name = model_name;
-      }
+      if (model_name) record.model_name = model_name;
+      if (series) record.series = series;
       if (product_type.toLowerCase() === 'tiles' && tilestype) {
         record.tilestype = tilestype;
       }
@@ -104,6 +105,19 @@ router.get('/tilestypes', async (req, res) => {
     res.status(200).json(tileTypes);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch tile types', details: err.message });
+  }
+});
+
+router.get('/series', async (req, res) => {
+  try {
+    const { brand } = req.query;
+    const body = brand ? { filter: { brand } } : {};
+    const { data } = await xata.post(`/tables/${TABLE}/query`, body);
+    const records = data.records || [];
+    const seriesList = [...new Set(records.map(item => item.series).filter(Boolean))];
+    res.status(200).json(seriesList);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch series', details: err.message });
   }
 });
 
