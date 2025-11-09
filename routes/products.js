@@ -47,46 +47,84 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post(
-  '/',
-  uploader.array('images', 15),
-  async (req, res) => {
-    try {
-      const { brand, product_type, description, tilestype, model_name, series } = req.body;
-      const files = req.files;
-      if (!brand || !product_type || !description || !files?.length) {
-        return res.status(400).json({
-          error: 'brand, product_type, description and at least one image are required'
-        });
-      }
-      const imageURLs = await Promise.all(
+router.post('/', uploader.array('images', 15), async (req, res) => {
+  try {
+    const { brand, product_type, description, tilestype, model_name, series } = req.body;
+    const files = req.files;
+    if (!brand || !product_type || !description || !files?.length) {
+      return res.status(400).json({
+        error: 'brand, product_type, description and at least one image are required'
+      });
+    }
+    const imageURLs = await Promise.all(
+      files.map(f =>
+        uploadToSpaces(
+          f.buffer,
+          f.originalname,
+          f.mimetype,
+          `products/${brand}/${product_type.replace(/\s+/g, '_')}`
+        ).then(({ Location }) => Location)
+      )
+    );
+    const record = {
+      brand,
+      product_type,
+      description,
+      images: imageURLs
+    };
+    if (model_name) record.model_name = model_name;
+    if (series) record.series = series;
+    if (product_type.toLowerCase() === 'tiles' && tilestype) {
+      record.tilestype = tilestype;
+    }
+    const { data } = await xata.post(`/tables/${TABLE}/data`, record);
+    res.status(201).json(data);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to add product', details: err.message });
+  }
+});
+
+router.put('/:id', uploader.array('images', 15), async (req, res) => {
+  try {
+    const id = req.params.id;
+    const { brand, product_type, description, tilestype, model_name, series } = req.body;
+    const files = req.files || [];
+    const { data: existing } = await xata.get(`/tables/${TABLE}/data/${id}`);
+    if (!existing) return res.status(404).json({ error: 'Product not found' });
+
+    let images = existing.images || [];
+    if (files.length > 0) {
+      images = await Promise.all(
         files.map(f =>
           uploadToSpaces(
             f.buffer,
             f.originalname,
             f.mimetype,
-            `products/${brand}/${product_type.replace(/\s+/g, '_')}`
+            `products/${(brand || existing.brand)}/${(product_type || existing.product_type).replace(/\s+/g, '_')}`
           ).then(({ Location }) => Location)
         )
       );
-      const record = {
-        brand,
-        product_type,
-        description,
-        images: imageURLs
-      };
-      if (model_name) record.model_name = model_name;
-      if (series) record.series = series;
-      if (product_type.toLowerCase() === 'tiles' && tilestype) {
-        record.tilestype = tilestype;
-      }
-      const { data } = await xata.post(`/tables/${TABLE}/data`, record);
-      res.status(201).json(data);
-    } catch (err) {
-      res.status(500).json({ error: 'Failed to add product', details: err.message });
     }
+
+    const updates = {};
+    if (brand !== undefined) updates.brand = brand;
+    if (product_type !== undefined) updates.product_type = product_type;
+    if (description !== undefined) updates.description = description;
+    if (model_name !== undefined) updates.model_name = model_name;
+    if (series !== undefined) updates.series = series;
+    if ((product_type || existing.product_type || '').toLowerCase() === 'tiles') {
+      if (tilestype !== undefined) updates.tilestype = tilestype;
+    } else {
+      updates.tilestype = null;
+    }
+    if (files.length > 0) updates.images = images;
+
+    const { data } = await xata.patch(`/tables/${TABLE}/data/${id}`, updates);
+    res.status(200).json(data);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update product', details: err.message });
   }
-);
+});
 
 router.delete('/:id', async (req, res) => {
   try {
