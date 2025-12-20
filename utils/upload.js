@@ -37,19 +37,24 @@ const s3 = new AWS.S3({
 });
 
 async function uploadToSpaces(buffer, originalName, mime, folder) {
-  const ext = path.extname(originalName).toLowerCase();
-  const key = `${folder}/${uuidv4()}${ext}`;
+  const safeName = originalName
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+    .replace(/[^a-z0-9_.-]/g, ''); // safety
+
+  const key = `${folder}/${Date.now()}_${safeName}`;
 
   const { Location } = await s3.upload({
     Bucket: process.env.DO_SPACES_BUCKET,
-    Key:    key,
-    Body:   buffer,
+    Key: key,
+    Body: buffer,
     ContentType: mime,
-    ACL:    'public-read'
+    ACL: 'public-read'
   }).promise();
 
-  return { Location };        // Return URL
+  return { Location };
 }
+
 
 /* ──────────────────────────────
    4.  Exports
