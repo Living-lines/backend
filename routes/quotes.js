@@ -30,9 +30,15 @@ router.delete('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const {
-      name, email, phone,
-      product_id, product_name, product_brand,
-      product_type, image_url
+      name,
+      email,
+      phone,
+      product_id,
+      product_name,
+      product_brand,
+      product_type,
+      image_url,
+      selected_color // 👈 NEW (optional)
     } = req.body;
 
     const response = await xata.post('/tables/quote_requests/data', {
@@ -44,13 +50,17 @@ router.post('/', async (req, res) => {
       product_brand,
       product_type,
       image_url,
+      selected_color: selected_color || null, // 👈 fail-safe
       requested_at: new Date().toISOString()
     });
 
     res.status(201).json(response.data);
   } catch (err) {
+    console.error('❌ POST /quotes error:', err.response?.data || err.message);
     res.status(500).json({ error: 'Failed to create quote', details: err.message });
   }
 });
+
+
 
 module.exports = router;
