@@ -56,7 +56,22 @@ router.get('/', async (req, res) => {
     `;
 
     const result = await pool.query(query, values);
-    res.json(result.rows);
+    res.json(
+  result.rows.map(p => ({
+    id: p.xata_id,                         // ✅ old id
+    name: p.model_name || p.name || '',    // ✅ old name
+    brand: p.brand,
+    type: p.product_type,                  // ✅ old type
+    image: Array.isArray(p.images) ? p.images[0] : p.images, // ✅ old image
+    series: p.series,
+    description: p.description,
+    tilestype: p.tilestype,
+    model_name: p.model_name,
+    product_type: p.product_type,
+    images: p.images
+  }))
+);
+
 
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch products', details: err.message });

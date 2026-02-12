@@ -14,15 +14,7 @@ router.get('/', async (req, res) => {
       ORDER BY xata_createdat DESC
     `);
 
-    res.json(
-  result.rows.map(p => ({
-    ...p,
-    id: p.xata_id,              // 👈 alias
-    type: p.product_type,       // 👈 alias
-    image: p.images?.[0] || ''  // 👈 first image
-  }))
-);
-
+    res.json(result.rows);
 
   } catch (err) {
     console.error('❌ GET /quotes error:', err.message);
