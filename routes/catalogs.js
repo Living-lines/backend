@@ -1,31 +1,47 @@
 const express = require('express');
 const router  = express.Router();
 const { catalogUpload, uploadToSpaces } = require('../utils/upload');
-const xata    = require('../config/xataClient');
+const pool    = require('../config/db'); // ✅ use postgres
 
-// GET all catalogs (unchanged)...
+// =============================
+// GET ALL CATALOGS
+// =============================
 router.get('/', async (req, res) => {
   try {
-    const response = await xata.post('/tables/catalogs/query', {});
-    res.json(response.data.records);
+    const result = await pool.query(`
+      SELECT *
+      FROM catalogs
+      ORDER BY xata_createdat DESC
+    `);
+
+    res.json(result.rows);
+
   } catch (err) {
     console.error("Get Catalogs Error:", err);
-    res.status(500).json({ error: 'Failed to fetch catalogs', details: err.message });
+    res.status(500).json({ 
+      error: 'Failed to fetch catalogs', 
+      details: err.message 
+    });
   }
 });
 
-// POST new catalog — now using field 'file' for PDF:
+
+// =============================
+// CREATE NEW CATALOG
+// =============================
 router.post('/', catalogUpload, async (req, res) => {
   try {
     const { title } = req.body;
-    const pdfFile   = req.files.file?.[0];    // ← look for 'file' here
-    const imgFile   = req.files.image?.[0];
+    const pdfFile   = req.files.file?.[0];   // PDF field name = "file"
+    const imgFile   = req.files.image?.[0];  // image field name = "image"
 
     if (!title || !pdfFile) {
-      return res.status(400).json({ error: 'Title and PDF file are required' });
+      return res.status(400).json({ 
+        error: 'Title and PDF file are required' 
+      });
     }
 
-    // upload PDF
+    // Upload PDF
     const { Location: pdf_url } = await uploadToSpaces(
       pdfFile.buffer,
       pdfFile.originalname,
@@ -33,7 +49,7 @@ router.post('/', catalogUpload, async (req, res) => {
       'catalogs'
     );
 
-    // upload image if provided
+    // Upload image (optional)
     let image_url = null;
     if (imgFile) {
       const { Location } = await uploadToSpaces(
@@ -45,17 +61,51 @@ router.post('/', catalogUpload, async (req, res) => {
       image_url = Location;
     }
 
-    // persist both URLs
-    const response = await xata.post(
-      '/tables/catalogs/data',
-      { title, pdf_url, image_url }
-    );
+    // Insert into PostgreSQL
+    const insertQuery = `
+      INSERT INTO catalogs (title, pdf_url, image_url)
+      VALUES ($1, $2, $3)
+      RETURNING *
+    `;
 
-    res.status(201).json(response.data);
+    const values = [title, pdf_url, image_url];
+
+    const result = await pool.query(insertQuery, values);
+
+    res.status(201).json(result.rows[0]);
+
   } catch (err) {
     console.error("Catalog Upload Error:", err);
-    res.status(500).json({ error: 'Failed to upload catalog', details: err.message });
+    res.status(500).json({ 
+      error: 'Failed to upload catalog', 
+      details: err.message 
+    });
   }
 });
+
+
+// =============================
+// DELETE CATALOG
+// =============================
+router.delete('/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+
+    await pool.query(
+      `DELETE FROM catalogs WHERE xata_id = $1`,
+      [id]
+    );
+
+    res.sendStatus(204);
+
+  } catch (err) {
+    console.error("Delete Catalog Error:", err);
+    res.status(500).json({ 
+      error: 'Failed to delete catalog',
+      details: err.message
+    });
+  }
+});
+
 
 module.exports = router;

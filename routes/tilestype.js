@@ -1,16 +1,28 @@
 const express = require('express');
 const router = express.Router();
-const xata = require('../config/xataClient');
+const pool = require('../config/db');
 
-const TABLE = 'tilestype';
+// =============================
+// GET ALL TILE TYPES
+// =============================
 router.get('/', async (req, res) => {
   try {
-    const { data } = await xata.post(`/tables/${TABLE}/query`, {});
-    const tileTypes = data.records.map(r => r.name);
+    const result = await pool.query(`
+      SELECT name
+      FROM tilestype
+      ORDER BY name ASC
+    `);
+
+    const tileTypes = result.rows.map(r => r.name);
+
     res.status(200).json(tileTypes);
+
   } catch (err) {
-    console.error('🚨 TilesType fetch error:', err.response?.data || err.message);
-    res.status(500).json({ error: 'Failed to fetch tile types', details: err.message });
+    console.error('🚨 TilesType fetch error:', err.message);
+    res.status(500).json({ 
+      error: 'Failed to fetch tile types', 
+      details: err.message 
+    });
   }
 });
 

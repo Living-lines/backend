@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const xata = require('../config/xataClient');
+const pool = require('../config/db'); // your pg connection
 const { uploader, uploadToSpaces } = require('../utils/upload');
 
 const TABLE = 'product';
@@ -8,54 +8,73 @@ const TABLE = 'product';
 router.get('/', async (req, res) => {
   try {
     const { brand, product_type, search, model, model_name, series } = req.query;
-    const filter = {};
-    if (brand) filter.brand = brand;
-    if (product_type) filter.product_type = product_type;
-    if (model || model_name) filter.model_name = model || model_name;
-    if (series) filter.series = series;
+
+    let conditions = [];
+    let values = [];
+    let index = 1;
+
+    if (brand) {
+      conditions.push(`brand = $${index++}`);
+      values.push(brand);
+    }
+
+    if (product_type) {
+      conditions.push(`product_type = $${index++}`);
+      values.push(product_type);
+    }
+
+    if (model || model_name) {
+      conditions.push(`model_name = $${index++}`);
+      values.push(model || model_name);
+    }
+
+    if (series) {
+      conditions.push(`series = $${index++}`);
+      values.push(series);
+    }
+
     if (search) {
-      filter.$any = [
-        { brand: { $contains: search } },
-        { product_type: { $contains: search } },
-        { description: { $contains: search } },
-        { model_name: { $contains: search } },
-        { series: { $contains: search } }
-      ];
+      conditions.push(`(
+        brand ILIKE $${index}
+        OR product_type ILIKE $${index}
+        OR description ILIKE $${index}
+        OR model_name ILIKE $${index}
+        OR series ILIKE $${index}
+      )`);
+      values.push(`%${search}%`);
+      index++;
     }
-    const PAGE_SIZE = 500;
-    let page = 0;
-    let allRecords = [];
-    let hasMore = true;
-    while (hasMore) {
-      const body = Object.keys(filter).length ? { filter } : {};
-      body.page = { size: PAGE_SIZE, offset: page * PAGE_SIZE };
-      const { data } = await xata.post(`/tables/${TABLE}/query`, body);
-      if (data && data.records && data.records.length > 0) {
-        allRecords = allRecords.concat(data.records);
-        if (data.records.length < PAGE_SIZE) {
-          hasMore = false;
-        } else {
-          page += 1;
-        }
-      } else {
-        hasMore = false;
-      }
-    }
-    res.status(200).json(allRecords);
+
+    const whereClause = conditions.length
+      ? `WHERE ${conditions.join(' AND ')}`
+      : '';
+
+    const query = `
+      SELECT * FROM product
+      ${whereClause}
+      ORDER BY xata_createdat DESC
+    `;
+
+    const result = await pool.query(query, values);
+    res.json(result.rows);
+
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch products', details: err.message });
   }
 });
 
+
 router.post('/', uploader.array('images', 15), async (req, res) => {
   try {
     const { brand, product_type, description, tilestype, model_name, series } = req.body;
     const files = req.files;
+
     if (!brand || !product_type || !description || !files?.length) {
       return res.status(400).json({
         error: 'brand, product_type, description and at least one image are required'
       });
     }
+
     const imageURLs = await Promise.all(
       files.map(f =>
         uploadToSpaces(
@@ -66,33 +85,49 @@ router.post('/', uploader.array('images', 15), async (req, res) => {
         ).then(({ Location }) => Location)
       )
     );
-    const record = {
+
+    const query = `
+      INSERT INTO product 
+      (brand, product_type, description, tilestype, model_name, series, images)
+      VALUES ($1,$2,$3,$4,$5,$6,$7)
+      RETURNING *
+    `;
+
+    const values = [
       brand,
       product_type,
       description,
-      images: imageURLs
-    };
-    if (model_name) record.model_name = model_name;
-    if (series) record.series = series;
-    if (product_type.toLowerCase() === 'tiles' && tilestype) {
-      record.tilestype = tilestype;
-    }
-    const { data } = await xata.post(`/tables/${TABLE}/data`, record);
-    res.status(201).json(data);
+      product_type.toLowerCase() === 'tiles' ? tilestype : null,
+      model_name || null,
+      series || null,
+      imageURLs
+    ];
+
+    const result = await pool.query(query, values);
+    res.status(201).json(result.rows[0]);
+
   } catch (err) {
     res.status(500).json({ error: 'Failed to add product', details: err.message });
   }
 });
 
+
 router.put('/:id', uploader.array('images', 15), async (req, res) => {
   try {
     const id = req.params.id;
-    const { brand, product_type, description, tilestype, model_name, series } = req.body;
     const files = req.files || [];
-    const { data: existing } = await xata.get(`/tables/${TABLE}/data/${id}`);
-    if (!existing) return res.status(404).json({ error: 'Product not found' });
 
-    let images = existing.images || [];
+    const existing = await pool.query(
+      `SELECT * FROM product WHERE xata_id = $1`,
+      [id]
+    );
+
+    if (!existing.rows.length)
+      return res.status(404).json({ error: 'Product not found' });
+
+    const product = existing.rows[0];
+    let images = product.images || [];
+
     if (files.length > 0) {
       images = await Promise.all(
         files.map(f =>
@@ -100,63 +135,90 @@ router.put('/:id', uploader.array('images', 15), async (req, res) => {
             f.buffer,
             f.originalname,
             f.mimetype,
-            `products/${(brand || existing.brand)}/${(product_type || existing.product_type).replace(/\s+/g, '_')}`
+            `products/${product.brand}/${product.product_type.replace(/\s+/g, '_')}`
           ).then(({ Location }) => Location)
         )
       );
     }
 
-    const updates = {};
-    if (brand !== undefined) updates.brand = brand;
-    if (product_type !== undefined) updates.product_type = product_type;
-    if (description !== undefined) updates.description = description;
-    if (model_name !== undefined) updates.model_name = model_name;
-    if (series !== undefined) updates.series = series;
-    if ((product_type || existing.product_type || '').toLowerCase() === 'tiles') {
-      if (tilestype !== undefined) updates.tilestype = tilestype;
-    } else {
-      updates.tilestype = null;
-    }
-    if (files.length > 0) updates.images = images;
+    const updateQuery = `
+      UPDATE product SET
+      brand = COALESCE($1, brand),
+      product_type = COALESCE($2, product_type),
+      description = COALESCE($3, description),
+      model_name = COALESCE($4, model_name),
+      series = COALESCE($5, series),
+      tilestype = $6,
+      images = $7
+      WHERE xata_id = $8
+      RETURNING *
+    `;
 
-    const { data } = await xata.patch(`/tables/${TABLE}/data/${id}`, updates);
-    res.status(200).json(data);
+    const values = [
+      req.body.brand || null,
+      req.body.product_type || null,
+      req.body.description || null,
+      req.body.model_name || null,
+      req.body.series || null,
+      req.body.product_type?.toLowerCase() === 'tiles'
+        ? req.body.tilestype
+        : null,
+      images,
+      id
+    ];
+
+    const result = await pool.query(updateQuery, values);
+    res.json(result.rows[0]);
+
   } catch (err) {
     res.status(500).json({ error: 'Failed to update product', details: err.message });
   }
 });
 
+
 router.delete('/:id', async (req, res) => {
   try {
-    await xata.delete(`/tables/${TABLE}/data/${req.params.id}`);
+    await pool.query(`DELETE FROM product WHERE xata_id = $1`, [req.params.id]);
     res.sendStatus(204);
   } catch (err) {
     res.status(500).json({ error: 'Failed to delete product', details: err.message });
   }
 });
 
+
 router.get('/tilestypes', async (req, res) => {
   try {
-    const { data } = await xata.post(`/tables/${TABLE}/query`, {});
-    const records = data.records || [];
-    const tileTypes = [...new Set(records.map(item => item.tilestype).filter(Boolean))];
-    res.status(200).json(tileTypes);
+    const result = await pool.query(`
+      SELECT DISTINCT tilestype 
+      FROM product 
+      WHERE tilestype IS NOT NULL
+    `);
+
+    res.json(result.rows.map(r => r.tilestype));
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch tile types', details: err.message });
+    res.status(500).json({ error: 'Failed to fetch tile types' });
   }
 });
+
 
 router.get('/series', async (req, res) => {
   try {
     const { brand } = req.query;
-    const body = brand ? { filter: { brand } } : {};
-    const { data } = await xata.post(`/tables/${TABLE}/query`, body);
-    const records = data.records || [];
-    const seriesList = [...new Set(records.map(item => item.series).filter(Boolean))];
-    res.status(200).json(seriesList);
+
+    const result = brand
+      ? await pool.query(
+          `SELECT DISTINCT series FROM product WHERE brand = $1 AND series IS NOT NULL`,
+          [brand]
+        )
+      : await pool.query(
+          `SELECT DISTINCT series FROM product WHERE series IS NOT NULL`
+        );
+
+    res.json(result.rows.map(r => r.series));
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch series', details: err.message });
+    res.status(500).json({ error: 'Failed to fetch series' });
   }
 });
+
 
 module.exports = router;
