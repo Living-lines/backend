@@ -109,14 +109,15 @@ router.post('/', uploader.array('images', 15), async (req, res) => {
     `;
 
     const values = [
-      brand,
-      product_type,
-      description,
-      product_type.toLowerCase() === 'tiles' ? tilestype : null,
-      model_name || null,
-      series || null,
-      imageURLs
-    ];
+  brand,
+  product_type,
+  description,
+  product_type.toLowerCase() === 'tiles' ? tilestype : null,
+  model_name || null,
+  series || null,
+  JSON.stringify(imageURLs)   // ✅ FIX
+];
+
 
     const result = await pool.query(query, values);
     res.status(201).json(result.rows[0]);
