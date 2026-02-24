@@ -57,20 +57,20 @@ router.get('/', async (req, res) => {
 
     const result = await pool.query(query, values);
     res.json(
-  result.rows.map(p => ({
-    id: p.xata_id,                         // ✅ old id
-    name: p.model_name || p.name || '',    // ✅ old name
-    brand: p.brand,
-    type: p.product_type,                  // ✅ old type
-    image: Array.isArray(p.images) ? p.images[0] : p.images, // ✅ old image
-    series: p.series,
-    description: p.description,
-    tilestype: p.tilestype,
-    model_name: p.model_name,
-    product_type: p.product_type,
-    images: p.images
-  }))
-);
+      result.rows.map(p => ({
+        id: p.xata_id,                         // ✅ old id
+        name: p.model_name || p.name || '',    // ✅ old name
+        brand: p.brand,
+        type: p.product_type,                  // ✅ old type
+        image: Array.isArray(p.images) ? p.images[0] : p.images, // ✅ old image
+        series: p.series,
+        description: p.description,
+        tilestype: p.tilestype,
+        model_name: p.model_name,
+        product_type: p.product_type,
+        images: p.images
+      }))
+    );
 
 
   } catch (err) {
@@ -109,14 +109,14 @@ router.post('/', uploader.array('images', 15), async (req, res) => {
     `;
 
     const values = [
-  brand,
-  product_type,
-  description,
-  product_type.toLowerCase() === 'tiles' ? tilestype : null,
-  model_name || null,
-  series || null,
-  JSON.stringify(imageURLs)   // ✅ FIX
-];
+      brand,
+      product_type,
+      description,
+      product_type.toLowerCase() === 'tiles' ? tilestype : null,
+      model_name || null,
+      series || null,
+      JSON.stringify(imageURLs)   // ✅ FIX
+    ];
 
 
     const result = await pool.query(query, values);
@@ -179,7 +179,7 @@ router.put('/:id', uploader.array('images', 15), async (req, res) => {
       req.body.product_type?.toLowerCase() === 'tiles'
         ? req.body.tilestype
         : null,
-      images,
+      JSON.stringify(images),
       id
     ];
 
@@ -223,12 +223,12 @@ router.get('/series', async (req, res) => {
 
     const result = brand
       ? await pool.query(
-          `SELECT DISTINCT series FROM product WHERE brand = $1 AND series IS NOT NULL`,
-          [brand]
-        )
+        `SELECT DISTINCT series FROM product WHERE brand = $1 AND series IS NOT NULL`,
+        [brand]
+      )
       : await pool.query(
-          `SELECT DISTINCT series FROM product WHERE series IS NOT NULL`
-        );
+        `SELECT DISTINCT series FROM product WHERE series IS NOT NULL`
+      );
 
     res.json(result.rows.map(r => r.series));
   } catch (err) {
